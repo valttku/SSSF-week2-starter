@@ -13,6 +13,7 @@ import {Cat, LoginUser} from '../../types/DBTypes';
 import {MessageResponse} from '../../types/MessageTypes';
 import CatModel from '../models/catModel';
 import CustomError from '../../classes/CustomError';
+import rectangleBounds from '../../utils/rectangleBounds';
 
 const catGetByUser = async (
   req: Request,
@@ -230,26 +231,36 @@ const catPost = async (
 
 const catGetByBoundingBox = async (
   req: Request<{}, {}, {}, {topRight: string; bottomLeft: string}>,
-  res: Response,
+  res: Response<Cat[]>,
   next: NextFunction
 ) => {
   try {
-    const topRight = req.query.topRight.split(',');
-    const bottomLeft = req.query.bottomLeft.split(',');
+    const topRight = req.query.topRight;
+    const bottomLeft = req.query.bottomLeft;
+    const [rightCorner1, rightCorner2] = topRight.split(',');
+    const [leftCorner1, leftCorner2] = bottomLeft.split(',');
+
+    const bounds = rectangleBounds(
+      {
+        lat: Number(rightCorner1),
+        lng: Number(rightCorner2),
+      },
+      {
+        lat: Number(leftCorner1),
+        lng: Number(leftCorner2),
+      }
+    );
+
     const cats = await CatModel.find({
       location: {
         $geoWithin: {
-          $box: [
-            [Number(bottomLeft[0]), Number(bottomLeft[1])],
-            [Number(topRight[0]), Number(topRight[1])],
-          ],
+          $geometry: bounds,
         },
       },
-    });
-    console.log('cats', cats);
+    }).select('-__v');
     res.json(cats);
-  } catch (error) {
-    next(new CustomError('Error while getting cats', 500));
+  } catch (err) {
+    next(err);
   }
 };
 
